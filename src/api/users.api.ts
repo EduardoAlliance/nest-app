@@ -2,9 +2,10 @@ import api from './axios'
 import type {
   ApiResponse,
   User,
-  PaginatedData,
+  ApiPaginatedData,
   CreateUserDto,
   UpdateUserDto,
+  UpdateProfileDto,
   UsersQueryParams,
 } from '../types'
 
@@ -13,15 +14,15 @@ export const usersApi = {
     return api.get<ApiResponse<User>>('/users/profile')
   },
 
-  updateProfile(data: { name?: string; email?: string }) {
+  updateProfile(data: UpdateProfileDto) {
     return api.patch<ApiResponse<User>>('/users/profile', data)
   },
 
   getUsers(params?: UsersQueryParams) {
-    return api.get<ApiResponse<PaginatedData<User>>>('/users', { params })
+    return api.get<ApiResponse<ApiPaginatedData<User>>>('/users', { params })
   },
 
-  getUser(id: string) {
+  getUser(id: number) {
     return api.get<ApiResponse<User>>(`/users/${id}`)
   },
 
@@ -29,15 +30,15 @@ export const usersApi = {
     return api.post<ApiResponse<User>>('/users', data)
   },
 
-  updateUser(id: string, data: UpdateUserDto) {
+  updateUser(id: number, data: UpdateUserDto) {
     return api.patch<ApiResponse<User>>(`/users/${id}`, data)
   },
 
-  deleteUser(id: string) {
+  deleteUser(id: number) {
     return api.delete<ApiResponse<null>>(`/users/${id}`)
   },
 
-  restoreUser(id: string) {
+  restoreUser(id: number) {
     return api.post<ApiResponse<User>>(`/users/${id}/restore`)
   },
 }

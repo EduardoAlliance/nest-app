@@ -1,10 +1,84 @@
 import { useState } from 'react'
-import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, useRestoreUser } from '../../../hooks/useUsers'
-import { Search, Plus, Pencil, Trash2, RotateCcw, X } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import type { User, CreateUserDto, UpdateUserDto } from '../../../types'
+import {
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react'
+import {
+  useCreateUser,
+  useDeleteUser,
+  useRestoreUser,
+  useUpdateUser,
+  useUsers,
+} from '../../../hooks/useUsers'
+import type { CreateUserDto, UpdateUserDto, User } from '../../../types'
+import { roleLabel, roleVariant } from '@/lib/badges'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Spinner } from '@/components/ui/spinner'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 const userFormSchema = z.object({
   name: z.string().min(2, 'Mínimo 2 caracteres'),
@@ -20,21 +94,28 @@ const emptyForm: UserForm = { name: '', email: '', password: '', role: 'user' }
 export default function AdminUsersPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState('')
+  const [roleFilter, setRoleFilter] = useState('all')
   const limit = 10
 
-  const { data: paginated, isLoading } = useUsers({ page, limit, search: search || undefined, role: roleFilter || undefined })
+  const { data: paginated, isLoading } = useUsers({
+    page,
+    limit,
+    search: search || undefined,
+    role: roleFilter === 'all' ? undefined : roleFilter,
+  })
   const createUser = useCreateUser()
   const updateUser = useUpdateUser()
   const deleteUser = useDeleteUser()
   const restoreUser = useRestoreUser()
 
-  const [modalOpen, setModalOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
 
   const {
     register,
     handleSubmit,
+    control,
     reset,
     formState: { errors },
   } = useForm<UserForm>({
@@ -45,241 +126,414 @@ export default function AdminUsersPage() {
   function openCreate() {
     setEditingUser(null)
     reset(emptyForm)
-    setModalOpen(true)
+    setDialogOpen(true)
   }
 
   function openEdit(user: User) {
     setEditingUser(user)
     reset({ name: user.name, email: user.email, password: '', role: user.role })
-    setModalOpen(true)
+    setDialogOpen(true)
   }
 
-  function closeModal() {
-    setModalOpen(false)
+  function closeDialog() {
+    setDialogOpen(false)
     setEditingUser(null)
     reset(emptyForm)
   }
 
   function onSubmit(data: UserForm) {
     if (editingUser) {
-      const payload: UpdateUserDto = { name: data.name, email: data.email, role: data.role }
+      const payload: UpdateUserDto = {
+        name: data.name,
+        email: data.email,
+        role: data.role,
+      }
       if (data.password) payload.password = data.password
-      updateUser.mutate({ id: editingUser.id, data: payload }, { onSuccess: closeModal })
+      updateUser.mutate(
+        { id: editingUser.id, data: payload },
+        { onSuccess: closeDialog },
+      )
     } else {
-      const payload: CreateUserDto = { name: data.name, email: data.email, password: data.password, role: data.role }
-      createUser.mutate(payload, { onSuccess: closeModal })
+      const payload: CreateUserDto = {
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        role: data.role,
+      }
+      createUser.mutate(payload, { onSuccess: closeDialog })
     }
   }
 
-  const roleBadge = (role: string) => {
-    const map: Record<string, string> = { admin: 'badge-error', moderator: 'badge-warning', user: 'badge-success' }
-    return `badge ${map[role] || 'badge-ghost'}`
-  }
+  const isSaving = createUser.isPending || updateUser.isPending
+  const items = paginated?.items ?? []
+  const total = paginated?.meta.total ?? 0
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Gestión de Usuarios</h1>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <Plus size={18} /> Nuevo Usuario
-        </button>
-      </div>
-
-      <div className="card bg-base-200 shadow-md mb-6">
-        <div className="card-body">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="join flex-1">
-              <div className="join-item flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40" size={18} />
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre o email..."
-                  className="input input-bordered w-full pl-10"
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-                />
-              </div>
-              <button className="join-item btn btn-ghost" onClick={() => { setSearch(''); setPage(1) }}>
-                <X size={18} />
-              </button>
-            </div>
-            <select
-              className="select select-bordered w-full sm:w-40"
-              value={roleFilter}
-              onChange={(e) => { setRoleFilter(e.target.value); setPage(1) }}
-            >
-              <option value="">Todos los roles</option>
-              <option value="admin">Admin</option>
-              <option value="moderator">Moderator</option>
-              <option value="user">User</option>
-            </select>
-          </div>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Gestión de usuarios
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Crea, edita y administra las cuentas de tu organización.
+          </p>
         </div>
+        <Button onClick={openCreate} size="lg" className="h-9">
+          <Plus data-icon="inline-start" />
+          Nuevo usuario
+        </Button>
       </div>
 
-      <div className="card bg-base-200 shadow-md">
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <div className="flex justify-center py-12">
-              <span className="loading loading-spinner loading-lg text-primary"></span>
-            </div>
-          ) : (
-            <>
-              <table className="table table-zebra">
-                <thead>
-                  <tr>
-                    <th>Nombre</th>
-                    <th>Email</th>
-                    <th>Rol</th>
-                    <th>Estado</th>
-                    <th>Verificado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginated?.items.map((user: User) => (
-                    <tr key={user.id} className={user.deletedAt ? 'opacity-50' : ''}>
-                      <td className="font-medium">{user.name}</td>
-                      <td>{user.email}</td>
-                      <td>
-                        <span className={roleBadge(user.role)}>{user.role}</span>
-                      </td>
-                      <td>
-                        {user.deletedAt ? (
-                          <span className="badge badge-ghost">Inactivo</span>
-                        ) : (
-                          <span className="badge badge-success">Activo</span>
-                        )}
-                      </td>
-                      <td>
-                        {user.isEmailVerified ? (
-                          <span className="badge badge-success">Sí</span>
-                        ) : (
-                          <span className="badge badge-ghost">No</span>
-                        )}
-                      </td>
-                      <td>
-                        <div className="flex gap-1">
-                          {user.deletedAt ? (
-                            <button
-                              className="btn btn-ghost btn-sm btn-square text-info"
-                              title="Restaurar"
-                              onClick={() => restoreUser.mutate(user.id)}
-                            >
-                              <RotateCcw size={16} />
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                className="btn btn-ghost btn-sm btn-square text-primary"
-                                title="Editar"
-                                onClick={() => openEdit(user)}
-                              >
-                                <Pencil size={16} />
-                              </button>
-                              <button
-                                className="btn btn-ghost btn-sm btn-square text-error"
-                                title="Eliminar"
-                                onClick={() => {
-                                  if (confirm('¿Estás seguro de eliminar este usuario?')) {
-                                    deleteUser.mutate(user.id)
-                                  }
-                                }}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {(!paginated?.items || paginated.items.length === 0) && (
-                    <tr>
-                      <td colSpan={6} className="text-center py-8 text-base-content/60">
-                        No se encontraron usuarios
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+      <Card>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar por nombre o email..."
+              className="h-9 pr-9 pl-9"
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setPage(1)
+              }}
+            />
+            {search && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="absolute top-1/2 right-1 -translate-y-1/2"
+                aria-label="Limpiar búsqueda"
+                onClick={() => {
+                  setSearch('')
+                  setPage(1)
+                }}
+              >
+                <X />
+              </Button>
+            )}
+          </div>
 
-              {paginated && paginated.meta.totalPages > 1 && (
-                <div className="flex justify-center items-center gap-2 p-4">
-                  <button
-                    className="btn btn-sm"
+          <Select
+            value={roleFilter}
+            onValueChange={(value) => {
+              setRoleFilter(value)
+              setPage(1)
+            }}
+          >
+            <SelectTrigger className="h-9 w-full sm:w-48">
+              <SelectValue placeholder="Todos los roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">Todos los roles</SelectItem>
+                <SelectItem value="admin">Administrador</SelectItem>
+                <SelectItem value="moderator">Moderador</SelectItem>
+                <SelectItem value="user">Usuario</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardHeader className="border-b">
+          <CardTitle>Usuarios</CardTitle>
+          <CardDescription>
+            {total > 0
+              ? `${total} ${total === 1 ? 'usuario registrado' : 'usuarios registrados'}`
+              : 'Sin usuarios registrados'}
+          </CardDescription>
+        </CardHeader>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Spinner className="size-6 text-primary" />
+          </div>
+        ) : items.length === 0 ? (
+          <Empty className="border-0 py-12">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Users />
+              </EmptyMedia>
+              <EmptyTitle>No se encontraron usuarios</EmptyTitle>
+              <EmptyDescription>
+                Prueba con otro término de búsqueda o cambia el filtro de rol.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="px-4">Nombre</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Rol</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Verificado</TableHead>
+                  <TableHead className="px-4 text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((user) => (
+                  <TableRow
+                    key={user.id}
+                    className={user.deletedAt ? 'opacity-60' : undefined}
+                  >
+                    <TableCell className="px-4 font-medium">
+                      {user.name}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.email}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={roleVariant(user.role)}>
+                        {roleLabel(user.role)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.deletedAt ? 'outline' : 'success'}>
+                        {user.deletedAt ? 'Inactivo' : 'Activo'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={user.emailVerified ? 'success' : 'outline'}
+                      >
+                        {user.emailVerified ? 'Sí' : 'No'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4">
+                      <div className="flex items-center justify-end gap-1">
+                        {user.deletedAt ? (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            title="Restaurar usuario"
+                            aria-label={`Restaurar a ${user.name}`}
+                            onClick={() => restoreUser.mutate(user.id)}
+                          >
+                            <RotateCcw />
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Editar usuario"
+                              aria-label={`Editar a ${user.name}`}
+                              onClick={() => openEdit(user)}
+                            >
+                              <Pencil />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Eliminar usuario"
+                              aria-label={`Eliminar a ${user.name}`}
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setDeleteTarget(user)}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {paginated && paginated.meta.totalPages > 1 && (
+              <div className="flex flex-col items-center justify-between gap-3 border-t px-4 py-3 sm:flex-row">
+                <span className="text-xs text-muted-foreground">
+                  Página {paginated.meta.page} de {paginated.meta.totalPages}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
                     disabled={!paginated.meta.hasPreviousPage}
-                    onClick={() => setPage((p) => p - 1)}
+                    onClick={() => setPage((current) => current - 1)}
                   >
                     Anterior
-                  </button>
-                  <span className="text-sm text-base-content/60">
-                    Página {paginated.meta.page} de {paginated.meta.totalPages}
-                  </span>
-                  <button
-                    className="btn btn-sm"
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     disabled={!paginated.meta.hasNextPage}
-                    onClick={() => setPage((p) => p + 1)}
+                    onClick={() => setPage((current) => current + 1)}
                   >
                     Siguiente
-                  </button>
+                  </Button>
                 </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+              </div>
+            )}
+          </>
+        )}
+      </Card>
 
-      {modalOpen && (
-        <dialog className="modal modal-open" onClick={(e) => { if (e.target === e.currentTarget) closeModal() }}>
-          <div className="modal-box">
-            <form method="dialog">
-              <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" onClick={closeModal}>
-                <X size={18} />
-              </button>
-            </form>
-            <h3 className="font-bold text-lg mb-4">
-              {editingUser ? 'Editar Usuario' : 'Crear Usuario'}
-            </h3>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="form-control">
-                <label className="label"><span className="label-text">Nombre</span></label>
-                <input type="text" className={`input input-bordered ${errors.name ? 'input-error' : ''}`} {...register('name')} />
-                {errors.name && <label className="label"><span className="label-text-alt text-error">{errors.name.message}</span></label>}
-              </div>
-              <div className="form-control">
-                <label className="label"><span className="label-text">Email</span></label>
-                <input type="email" className={`input input-bordered ${errors.email ? 'input-error' : ''}`} {...register('email')} />
-                {errors.email && <label className="label"><span className="label-text-alt text-error">{errors.email.message}</span></label>}
-              </div>
-              <div className="form-control">
-                <label className="label"><span className="label-text">{editingUser ? 'Nueva contraseña (opcional)' : 'Contraseña'}</span></label>
-                <input type="password" className={`input input-bordered ${errors.password ? 'input-error' : ''}`} {...register('password')} />
-                {errors.password && <label className="label"><span className="label-text-alt text-error">{errors.password.message}</span></label>}
-              </div>
-              <div className="form-control">
-                <label className="label"><span className="label-text">Rol</span></label>
-                <select className="select select-bordered" {...register('role')}>
-                  <option value="user">User</option>
-                  <option value="moderator">Moderator</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div className="modal-action">
-                <button type="button" className="btn" onClick={closeModal}>Cancelar</button>
-                <button type="submit" className="btn btn-primary" disabled={createUser.isPending || updateUser.isPending}>
-                  {(createUser.isPending || updateUser.isPending) ? (
-                    <span className="loading loading-spinner loading-sm"></span>
-                  ) : (
-                    editingUser ? 'Guardar' : 'Crear'
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open) closeDialog()
+          else setDialogOpen(true)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingUser ? 'Editar usuario' : 'Crear usuario'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingUser
+                ? 'Actualiza los datos de la cuenta. La contraseña es opcional.'
+                : 'Completa los datos para dar de alta una nueva cuenta.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex flex-col gap-4"
+          >
+            <FieldGroup className="gap-4">
+              <Field data-invalid={!!errors.name}>
+                <FieldLabel htmlFor="name">Nombre</FieldLabel>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Nombre completo"
+                  className="h-9"
+                  aria-invalid={!!errors.name}
+                  {...register('name')}
+                />
+                <FieldError errors={[errors.name]} />
+              </Field>
+
+              <Field data-invalid={!!errors.email}>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="tu@email.com"
+                  className="h-9"
+                  aria-invalid={!!errors.email}
+                  {...register('email')}
+                />
+                <FieldError errors={[errors.email]} />
+              </Field>
+
+              <Field data-invalid={!!errors.password}>
+                <FieldLabel htmlFor="password">
+                  {editingUser ? 'Nueva contraseña' : 'Contraseña'}
+                </FieldLabel>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Mínimo 6 caracteres"
+                  className="h-9"
+                  aria-invalid={!!errors.password}
+                  {...register('password')}
+                />
+                <FieldError errors={[errors.password]} />
+                {editingUser && (
+                  <FieldDescription>
+                    Déjala vacía para conservar la contraseña actual.
+                  </FieldDescription>
+                )}
+              </Field>
+
+              <Field data-invalid={!!errors.role}>
+                <FieldLabel htmlFor="role">Rol</FieldLabel>
+                <Controller
+                  control={control}
+                  name="role"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <SelectTrigger id="role" className="h-9 w-full">
+                        <SelectValue placeholder="Selecciona un rol" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="user">Usuario</SelectItem>
+                          <SelectItem value="moderator">Moderador</SelectItem>
+                          <SelectItem value="admin">Administrador</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   )}
-                </button>
-              </div>
-            </form>
-          </div>
-          <div className="modal-backdrop" onClick={closeModal}></div>
-        </dialog>
-      )}
+                />
+                <FieldError errors={[errors.role]} />
+              </Field>
+            </FieldGroup>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Spinner data-icon="inline-start" />
+                    Guardando...
+                  </>
+                ) : editingUser ? (
+                  'Guardar cambios'
+                ) : (
+                  'Crear usuario'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar usuario?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción desactivará la cuenta de{' '}
+              <span className="font-medium text-foreground">
+                {deleteTarget?.name}
+              </span>
+              . Podrás restaurarla más tarde desde esta misma tabla.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={deleteUser.isPending}
+              onClick={() => {
+                if (deleteTarget) deleteUser.mutate(deleteTarget.id)
+                setDeleteTarget(null)
+              }}
+            >
+              {deleteUser.isPending ? (
+                <>
+                  <Spinner data-icon="inline-start" />
+                  Eliminando...
+                </>
+              ) : (
+                'Eliminar'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

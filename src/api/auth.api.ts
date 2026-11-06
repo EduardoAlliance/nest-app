@@ -1,8 +1,9 @@
 import api from './axios'
 import type {
   ApiResponse,
-  User,
-  AuthTokens,
+  LoginResponse,
+  RefreshResponse,
+  SessionUser,
   LoginDto,
   RegisterDto,
   ForgotPasswordDto,
@@ -11,15 +12,18 @@ import type {
 
 export const authApi = {
   login(data: LoginDto) {
-    return api.post<ApiResponse<AuthTokens>>('/auth/login', data)
+    return api.post<ApiResponse<LoginResponse>>('/auth/login', data)
   },
 
   register(data: RegisterDto) {
-    return api.post<ApiResponse<{ user: User }>>('/auth/register', data)
+    return api.post<ApiResponse<SessionUser>>('/auth/register', data)
   },
 
+  /**
+   * El refresh token viaja en la cookie HttpOnly, por eso no se envía body.
+   */
   refresh() {
-    return api.post<ApiResponse<AuthTokens>>('/auth/refresh')
+    return api.post<ApiResponse<RefreshResponse>>('/auth/refresh')
   },
 
   logout() {

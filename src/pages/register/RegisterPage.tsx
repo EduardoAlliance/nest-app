@@ -2,8 +2,18 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, Navigate } from 'react-router-dom'
-import { useRegister, useAuthStatus } from '../../hooks/useAuth'
+import { useRegister, useSession } from '../../hooks/useAuth'
 import { UserPlus } from 'lucide-react'
+import { AuthLayout } from '@/components/layout/AuthLayout'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
 
 const registerSchema = z
   .object({
@@ -26,7 +36,7 @@ const registerSchema = z
 type RegisterForm = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
-  const { isAuthenticated, isInitialized, accessToken } = useAuthStatus()
+  const { isAuthenticated, isLoading } = useSession()
   const registerMutation = useRegister()
 
   const {
@@ -38,10 +48,10 @@ export default function RegisterPage() {
     resolver: zodResolver(registerSchema),
   })
 
-  if (accessToken && !isInitialized) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-base-300">
-        <span className="loading loading-spinner loading-lg text-primary"></span>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Spinner className="size-6 text-primary" />
       </div>
     )
   }
@@ -53,120 +63,104 @@ export default function RegisterPage() {
   const onSubmit = (data: RegisterForm) => {
     registerMutation.mutate(
       { name: data.name, email: data.email, password: data.password },
-      { onSuccess: () => reset() }
+      { onSuccess: () => reset() },
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-base-300 px-4">
-      <div className="card w-full max-w-md bg-base-100 shadow-xl">
-        <div className="card-body p-8">
-          <div className="text-center mb-6">
-            <div className="flex justify-center mb-4">
-              <div className="bg-primary/10 p-3 rounded-full">
-                <UserPlus className="text-primary" size={32} />
-              </div>
-            </div>
-            <h1 className="text-2xl font-bold">Crear Cuenta</h1>
-            <p className="text-base-content/60 text-sm mt-1">
-              Completa el formulario para registrarte
-            </p>
-          </div>
+    <AuthLayout
+      title="Crea tu cuenta"
+      description="Completa el formulario para empezar a usar el panel."
+      icon={<UserPlus className="size-5" />}
+      footer={
+        <>
+          ¿Ya tienes cuenta?{' '}
+          <Link
+            to="/login"
+            className="font-medium text-primary hover:underline"
+          >
+            Iniciar sesión
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+        <FieldGroup>
+          <Field data-invalid={!!errors.name}>
+            <FieldLabel htmlFor="name">Nombre completo</FieldLabel>
+            <Input
+              id="name"
+              type="text"
+              autoComplete="name"
+              placeholder="Tu nombre"
+              className="h-10"
+              aria-invalid={!!errors.name}
+              {...register('name')}
+            />
+            <FieldError errors={[errors.name]} />
+          </Field>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="form-control w-full">
-              <label className="label">
-                <span className="label-text">Nombre</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Tu nombre"
-                className={`input input-bordered w-full ${errors.name ? 'input-error' : ''}`}
-                {...register('name')}
-              />
-              {errors.name && (
-                <label className="label">
-                  <span className="label-text-alt text-error">{errors.name.message}</span>
-                </label>
-              )}
-            </div>
+          <Field data-invalid={!!errors.email}>
+            <FieldLabel htmlFor="email">Correo electrónico</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="tu@email.com"
+              className="h-10"
+              aria-invalid={!!errors.email}
+              {...register('email')}
+            />
+            <FieldError errors={[errors.email]} />
+          </Field>
 
-            <div className="form-control w-full">
-              <label className="label">
-                <span className="label-text">Email</span>
-              </label>
-              <input
-                type="email"
-                placeholder="tu@email.com"
-                className={`input input-bordered w-full ${errors.email ? 'input-error' : ''}`}
-                {...register('email')}
-              />
-              {errors.email && (
-                <label className="label">
-                  <span className="label-text-alt text-error">{errors.email.message}</span>
-                </label>
-              )}
-            </div>
+          <Field data-invalid={!!errors.password}>
+            <FieldLabel htmlFor="password">Contraseña</FieldLabel>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Mín. 8 caracteres"
+              className="h-10"
+              aria-invalid={!!errors.password}
+              {...register('password')}
+            />
+            <FieldError errors={[errors.password]} />
+          </Field>
 
-            <div className="form-control w-full">
-              <label className="label">
-                <span className="label-text">Contraseña</span>
-              </label>
-              <input
-                type="password"
-                placeholder="Mín. 8 caracteres"
-                className={`input input-bordered w-full ${errors.password ? 'input-error' : ''}`}
-                {...register('password')}
-              />
-              {errors.password && (
-                <label className="label">
-                  <span className="label-text-alt text-error">{errors.password.message}</span>
-                </label>
-              )}
-            </div>
+          <Field data-invalid={!!errors.confirmPassword}>
+            <FieldLabel htmlFor="confirmPassword">
+              Confirmar contraseña
+            </FieldLabel>
+            <Input
+              id="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Repite la contraseña"
+              className="h-10"
+              aria-invalid={!!errors.confirmPassword}
+              {...register('confirmPassword')}
+            />
+            <FieldError errors={[errors.confirmPassword]} />
+          </Field>
+        </FieldGroup>
 
-            <div className="form-control w-full">
-              <label className="label">
-                <span className="label-text">Confirmar Contraseña</span>
-              </label>
-              <input
-                type="password"
-                placeholder="Repite la contraseña"
-                className={`input input-bordered w-full ${errors.confirmPassword ? 'input-error' : ''}`}
-                {...register('confirmPassword')}
-              />
-              {errors.confirmPassword && (
-                <label className="label">
-                  <span className="label-text-alt text-error">
-                    {errors.confirmPassword.message}
-                  </span>
-                </label>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary w-full"
-              disabled={registerMutation.isPending}
-            >
-              {registerMutation.isPending ? (
-                <span className="loading loading-spinner loading-sm"></span>
-              ) : (
-                'Crear Cuenta'
-              )}
-            </button>
-          </form>
-
-          <div className="text-center mt-4">
-            <p className="text-sm text-base-content/60">
-              ¿Ya tienes cuenta?{' '}
-              <Link to="/login" className="link link-primary">
-                Iniciar Sesión
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+        <Button
+          type="submit"
+          size="lg"
+          className="h-10 w-full"
+          disabled={registerMutation.isPending}
+        >
+          {registerMutation.isPending ? (
+            <>
+              <Spinner data-icon="inline-start" />
+              Creando cuenta...
+            </>
+          ) : (
+            'Crear cuenta'
+          )}
+        </Button>
+      </form>
+    </AuthLayout>
   )
 }

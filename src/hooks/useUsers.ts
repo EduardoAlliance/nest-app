@@ -1,14 +1,33 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersApi } from '../api/users.api'
+import { useAuthStore } from '../store/auth.store'
 import toast from 'react-hot-toast'
-import type { UsersQueryParams, CreateUserDto, UpdateUserDto } from '../types'
+import type {
+  UsersQueryParams,
+  CreateUserDto,
+  UpdateUserDto,
+  UpdateProfileDto,
+} from '../types'
 
 export function useUsers(params?: UsersQueryParams) {
   return useQuery({
     queryKey: ['users', params],
     queryFn: async () => {
       const { data } = await usersApi.getUsers(params)
-      return data.data
+      const payload = data.data
+      const totalPages = Math.ceil(payload.total / payload.limit)
+
+      return {
+        items: payload.data,
+        meta: {
+          total: payload.total,
+          page: payload.page,
+          limit: payload.limit,
+          totalPages,
+          hasNextPage: payload.page < totalPages,
+          hasPreviousPage: payload.page > 1,
+        },
+      }
     },
   })
 }
@@ -18,6 +37,7 @@ export function useProfile() {
     queryKey: ['profile'],
     queryFn: async () => {
       const { data } = await usersApi.getProfile()
+      useAuthStore.getState().setUser(data.data)
       return data.data
     },
   })
@@ -27,10 +47,10 @@ export function useUpdateProfile() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: { name?: string; email?: string }) => usersApi.updateProfile(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
-      queryClient.invalidateQueries({ queryKey: ['session'] })
+    mutationFn: (data: UpdateProfileDto) => usersApi.updateProfile(data),
+    onSuccess: ({ data }) => {
+      useAuthStore.getState().setUser(data.data)
+      queryClient.setQueryData(['profile'], data.data)
       toast.success('Perfil actualizado')
     },
     onError: (error: any) => {
@@ -60,7 +80,7 @@ export function useUpdateUser() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateUserDto }) =>
+    mutationFn: ({ id, data }: { id: number; data: UpdateUserDto }) =>
       usersApi.updateUser(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
@@ -77,7 +97,7 @@ export function useDeleteUser() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: string) => usersApi.deleteUser(id),
+    mutationFn: (id: number) => usersApi.deleteUser(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       toast.success('Usuario eliminado')
@@ -93,7 +113,7 @@ export function useRestoreUser() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: string) => usersApi.restoreUser(id),
+    mutationFn: (id: number) => usersApi.restoreUser(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
       toast.success('Usuario restaurado')

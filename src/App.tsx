@@ -22,9 +22,11 @@ export default function App() {
         toastOptions={{
           duration: 4000,
           style: {
-            background: '#1e293b',
-            color: '#f1f5f9',
-            border: '1px solid #334155',
+            background: 'var(--card)',
+            color: 'var(--card-foreground)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            fontSize: '0.875rem',
           },
         }}
       />

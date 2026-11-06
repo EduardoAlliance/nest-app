@@ -2,8 +2,18 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Link, Navigate } from 'react-router-dom'
-import { useLogin, useAuthStatus } from '../../hooks/useAuth'
+import { useLogin, useSession } from '../../hooks/useAuth'
 import { LogIn } from 'lucide-react'
+import { AuthLayout } from '@/components/layout/AuthLayout'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -13,7 +23,7 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
-  const { isAuthenticated, isInitialized, accessToken } = useAuthStatus()
+  const { isAuthenticated, isLoading } = useSession()
   const login = useLogin()
 
   const {
@@ -24,10 +34,10 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   })
 
-  if (accessToken && !isInitialized) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-base-300">
-        <span className="loading loading-spinner loading-lg text-primary"></span>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Spinner className="size-6 text-primary" />
       </div>
     )
   }
@@ -41,85 +51,77 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-base-300 px-4">
-      <div className="card w-full max-w-md bg-base-100 shadow-xl">
-        <div className="card-body p-8">
-          <div className="text-center mb-6">
-            <div className="flex justify-center mb-4">
-              <div className="bg-primary/10 p-3 rounded-full">
-                <LogIn className="text-primary" size={32} />
-              </div>
-            </div>
-            <h1 className="text-2xl font-bold">Iniciar Sesión</h1>
-            <p className="text-base-content/60 text-sm mt-1">
-              Ingresa tus credenciales para acceder
-            </p>
-          </div>
+    <AuthLayout
+      title="Inicia sesión"
+      description="Ingresa tus credenciales para acceder al panel de administración."
+      icon={<LogIn className="size-5" />}
+      footer={
+        <>
+          ¿No tienes cuenta?{' '}
+          <Link
+            to="/register"
+            className="font-medium text-primary hover:underline"
+          >
+            Crear cuenta
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
+        <FieldGroup>
+          <Field data-invalid={!!errors.email}>
+            <FieldLabel htmlFor="email">Correo electrónico</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="tu@email.com"
+              className="h-10"
+              aria-invalid={!!errors.email}
+              {...register('email')}
+            />
+            <FieldError errors={[errors.email]} />
+          </Field>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="form-control w-full">
-              <label className="label">
-                <span className="label-text">Email</span>
-              </label>
-              <input
-                type="email"
-                placeholder="tu@email.com"
-                className={`input input-bordered w-full ${errors.email ? 'input-error' : ''}`}
-                {...register('email')}
-              />
-              {errors.email && (
-                <label className="label">
-                  <span className="label-text-alt text-error">{errors.email.message}</span>
-                </label>
-              )}
-            </div>
-
-            <div className="form-control w-full">
-              <label className="label">
-                <span className="label-text">Contraseña</span>
-              </label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                className={`input input-bordered w-full ${errors.password ? 'input-error' : ''}`}
-                {...register('password')}
-              />
-              {errors.password && (
-                <label className="label">
-                  <span className="label-text-alt text-error">{errors.password.message}</span>
-                </label>
-              )}
-            </div>
-
-            <div className="flex justify-end">
-              <Link to="/forgot-password" className="link link-primary link-hover text-sm">
+          <Field data-invalid={!!errors.password}>
+            <div className="flex items-center justify-between gap-2">
+              <FieldLabel htmlFor="password">Contraseña</FieldLabel>
+              <Link
+                to="/forgot-password"
+                className="text-xs font-medium text-primary hover:underline"
+              >
                 ¿Olvidaste tu contraseña?
               </Link>
             </div>
+            <Input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="••••••••"
+              className="h-10"
+              aria-invalid={!!errors.password}
+              {...register('password')}
+            />
+            <FieldError errors={[errors.password]} />
+          </Field>
+        </FieldGroup>
 
-            <button
-              type="submit"
-              className="btn btn-primary w-full"
-              disabled={login.isPending}
-            >
-              {login.isPending ? (
-                <span className="loading loading-spinner loading-sm"></span>
-              ) : (
-                'Iniciar Sesión'
-              )}
-            </button>
-          </form>
-
-          <div className="text-center mt-4">
-            <p className="text-sm text-base-content/60">
-              ¿No tienes cuenta?{' '}
-              <Link to="/register" className="link link-primary">
-                Registrarse
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+        <Button
+          type="submit"
+          size="lg"
+          className="h-10 w-full"
+          disabled={login.isPending}
+        >
+          {login.isPending ? (
+            <>
+              <Spinner data-icon="inline-start" />
+              Ingresando...
+            </>
+          ) : (
+            'Iniciar sesión'
+          )}
+        </Button>
+      </form>
+    </AuthLayout>
   )
 }
